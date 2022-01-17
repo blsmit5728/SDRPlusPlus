@@ -1,4 +1,5 @@
 #include <SoapySDR/Constants.h>
+#include <SoapySDR/Version.hpp>
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 #include <module.h>
@@ -32,7 +33,7 @@ public:
         //TODO: Make module tune on source select change (in sdrpp_core)
 
         uiGains = new float[1];
-
+        SoapySDR::setLogLevel( SOAPY_SDR_DEBUG );
         refresh();
 
         // Select default device
@@ -81,10 +82,12 @@ public:
 
 private:
     void refresh() {
+        spdlog::info("---- Soapy Version: {0}", SoapySDR::getAPIVersion());
         devList = SoapySDR::Device::enumerate();
         txtDevList = "";
         int i = 0;
         for (auto& dev : devList) {
+            spdlog::info("--->  {0}", dev["driver"]);
             txtDevList += dev["label"] != "" ? dev["label"] : dev["driver"];
             txtDevList += '\0';
             i++;
@@ -152,7 +155,12 @@ private:
             selectDevice(devList[0]["label"]);
             return;
         }
-
+        //devArgs["driver"] = "cyberradiosoapy";
+        //devArgs["host"] = "192.168.0.10";
+        //devArgs["streamif"] = "enp1s0f0:enp1s0f1:enp2s0f0:enp2s0f1";
+        //devArgs["radio"] = "ndr324";
+        //devArgs["verbose"] = "true";
+         
         SoapySDR::Device* dev = SoapySDR::Device::make(devArgs);
 
         antennaList = dev->listAntennas(SOAPY_SDR_RX, channelId);

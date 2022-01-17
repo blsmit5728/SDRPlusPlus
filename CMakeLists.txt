@@ -25,7 +25,8 @@ option(OPT_BUILD_SDRPLAY_SOURCE "Build SDRplay Source Module (Dependencies: libs
 option(OPT_BUILD_SOAPY_SOURCE "Build SoapySDR Source Module (Dependencies: soapysdr)" ON)
 option(OPT_BUILD_SPYSERVER_SOURCE "Build SpyServer Source Module (no dependencies required)" ON)
 option(OPT_BUILD_PLUTOSDR_SOURCE "Build PlutoSDR Source Module (Dependencies: libiio, libad9361)" ON)
-
+option(OPT_BUILD_CYBERRADIO_SOURCE "Build CyberRadio Source Module (Dependencies: libcyberradio)" ON)
+message(STATUS "OPT_BUILD_CYBERRADIO_SOURCE = ${OPT_BUILD_CYBERRADIO_SOURCE}")
 # Sinks
 option(OPT_BUILD_AUDIO_SINK "Build Audio Sink Module (Dependencies: rtaudio)" ON)
 option(OPT_BUILD_PORTAUDIO_SINK "Build PortAudio Sink Module (Dependencies: portaudio)" OFF)
@@ -102,6 +103,10 @@ endif (OPT_BUILD_SDRPLAY_SOURCE)
 if (OPT_BUILD_SOAPY_SOURCE)
 add_subdirectory("source_modules/soapy_source")
 endif (OPT_BUILD_SOAPY_SOURCE)
+
+if (OPT_BUILD_CYBERRADIO_SOURCE)
+add_subdirectory("source_modules/cyberradio_source")
+endif (OPT_BUILD_CYBERRADIO_SOURCE)
 
 if (OPT_BUILD_SPYSERVER_SOURCE)
 add_subdirectory("source_modules/spyserver_source")
