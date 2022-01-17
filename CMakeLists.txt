@@ -45,7 +45,8 @@ option(OPT_BUILD_SPECTRAN_HTTP_SOURCE "Build Spectran HTTP Source Module (no dep
 option(OPT_BUILD_SPYSERVER_SOURCE "Build SpyServer Source Module (no dependencies required)" ON)
 option(OPT_BUILD_PLUTOSDR_SOURCE "Build PlutoSDR Source Module (Dependencies: libiio, libad9361)" ON)
 option(OPT_BUILD_USRP_SOURCE "Build USRP Source Module (libuhd)" OFF)
-
+option(OPT_BUILD_CYBERRADIO_SOURCE "Build CyberRadio Source Module (Dependencies: libcyberradio)" ON)
+message(STATUS "OPT_BUILD_CYBERRADIO_SOURCE = ${OPT_BUILD_CYBERRADIO_SOURCE}")
 # Sinks
 option(OPT_BUILD_ANDROID_AUDIO_SINK "Build Android Audio Sink Module (Dependencies: AAudio, only for android)" OFF)
 option(OPT_BUILD_AUDIO_SINK "Build Audio Sink Module (Dependencies: rtaudio)" ON)
@@ -138,6 +139,10 @@ endif (OPT_BUILD_SPECTRAN_SOURCE)
 if (OPT_BUILD_SPECTRAN_HTTP_SOURCE)
 add_subdirectory("source_modules/spectran_http_source")
 endif (OPT_BUILD_SPECTRAN_HTTP_SOURCE)
+
+if (OPT_BUILD_CYBERRADIO_SOURCE)
+add_subdirectory("source_modules/cyberradio_source")
+endif (OPT_BUILD_CYBERRADIO_SOURCE)
 
 if (OPT_BUILD_SPYSERVER_SOURCE)
 add_subdirectory("source_modules/spyserver_source")
