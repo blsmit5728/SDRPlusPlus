@@ -18,6 +18,9 @@
 #include <stdio.h>
 #include <netpacket/packet.h>
 
+#define VALUE_DEC(val) std::dec << val
+#define VALUE_HEX(val,bits) "0x" << std::hex << std::setw(bits/4) << std::setfill('0') << val
+#define VALUE_DEC_HEX(val,bits) VALUE_DEC(val) << " (" << VALUE_HEX(val,bits) << ")"
 
 SDRPP_MOD_INFO{
     /* Name:            */ "cyberradio_source",
@@ -47,8 +50,10 @@ public:
         handler.stream = &stream;
 
         this->devId = 0;
-        std::memset(this->hostname, 0, 1024);
-        std::memset(this->_streamIntf, 0, 1024);
+        std::memset(this->_hostname, 0, 1024);
+        //std::memset(this->_streamIntf, 0, 1024);
+
+        _interfaceTxtList = getNetworkInterfaces();
 
         this->refresh();
         config.acquire();
@@ -170,15 +175,59 @@ private:
         return macAddress;
     }
 
+    std::string getNetworkInterfaces( )
+    {
+        struct ifaddrs *addrs,*tmp;
+        getifaddrs(&addrs);
+        tmp = addrs;
+        std::string ret;
+        while (tmp)
+        {
+            if (tmp->ifa_addr && tmp->ifa_addr->sa_family == AF_PACKET)
+            {
+                ret += tmp->ifa_name;
+                this->_interfaceVector.push_back(std::string(tmp->ifa_name));
+                ret += '\0';
+            }
+            tmp = tmp->ifa_next;
+        }
+
+        freeifaddrs(addrs);
+        return ret;
+    }
+
     void selectDevice(std::string name) {
-        spdlog::info("CyberRadioModule: selectDevice({0}) Host: {1}", name.c_str(), this->hostname);
-        _handler = LibCyberRadio::Driver::getRadioObject(name, this->hostname, -1, true);
+        spdlog::info("CyberRadioModule: selectDevice({0}) Host: {1}", name.c_str(), this->_hostname);
+        _handler = LibCyberRadio::Driver::getRadioObject(name, this->_hostname, -1, true);
         _connected = true;
-        _wbddcRates = _handler->getWbddcRateSet();
-        _nbddcRates = _handler->getNbddcRateSet();
+        _handler->setTunerFrequency(0, 100000000.0);
+        _currentTunedFreq = 100000000.0;
+        if ( _handler->getNumWbddc() ){
+            _wbddcRates = _handler->getWbddcRateSet();
+        }
+        if ( _handler->getNumNbddc() ){
+            _nbddcRates = _handler->getNbddcRateSet();
+        }
+        this->_radioName = name;
+        // Create the information for Channel Selection.
+        this->_numChannels = _handler->getNumTuner();
+        _channelsTxtList = "";
+        for( int i = 0; i < this->_numChannels; i++)
+        {
+            _channelsTxtList += std::to_string(i);
+            _channelsTxtList += '\0';
+        }
+        // Create stuff for Rate Selection
+        for( auto &it : _nbddcRates )
+        {
+            std::pair<int, double> a(it.first, it.second);
+            sampleRates.push_back(it.second);
+            _rateSet.insert(a);
+        }
         for( auto &it : _wbddcRates )
         {
             std::pair<int, double> a(it.first, it.second);
+            sampleRates.push_back(it.second);
             _rateSet.insert(a);
         }
         txtSrList = "";
@@ -213,6 +262,11 @@ private:
         } else {
             setSampleRate( samplerate );
         }
+    }
+
+    void selectSourceChannel( int channel )
+    {
+        this->_handler->setWbddcSource( 0, channel );
     }
 
     std::string createSourceIPAddress( std::string input )
@@ -260,9 +314,9 @@ private:
 
     void setupStream( void )
     {
-        std::string s(this->_streamIntf);
-        std::string ip = this->getIPAddress( s );
-        std::string mac = this->getMacAddress( s );
+        //std::string s(this->_streamIntf);
+        std::string ip = this->getIPAddress( this->_streamIntf );
+        std::string mac = this->getMacAddress( this->_streamIntf );
         spdlog::info("CyberRadioModule: Iface: {0} IP: {1} MAC: {2}", 
                     this->_streamIntf, ip.c_str(), mac.c_str());
         // assume Channel 0 DDC 0 ETH0 etc.
@@ -272,10 +326,33 @@ private:
         _handler->setDataPortDestInfo(0, 0, ip, mac, 4991, 4991);
 
         std::string n = "VITA_SDRPP";
+
+        _vitaPacketSize =  _handler->getVitaHeaderSize() + 
+                           _handler->getVitaPayloadSize() +
+                           _handler->getVitaTailSize();
+        _vitaSamplesPerPacket = _handler->getVitaPayloadSize() / 4;
+
+        spdlog::info("-- Vita Header  : {0}", _handler->getVitaHeaderSize());
+        spdlog::info("-- Vita Payload : {0}", _handler->getVitaPayloadSize());
+        spdlog::info("-- Vita Trailer : {0}", _handler->getVitaTailSize());
+        spdlog::info("-- Vita Packet  : {0}", _vitaPacketSize);
+
+        int vitaType = 0;
+        if( this->_radioName == "ndr551"  || 
+            this->_radioName == "ndr358"  ||
+            this->_radioName == "ndr357")
+        {   
+            vitaType = 551;
+        } else if ( this->_radioName == "ndr324" )
+        {
+            vitaType = 324;
+        }
+
         _stream = new LibCyberRadio::VitaIqSource(n,
-                    3, this->_handler->getVitaPayloadSize(),
-                    this->_handler->getVitaHeaderSize(),
-                    this->_handler->getVitaTailSize(),
+                    vitaType, 
+                    _handler->getVitaPayloadSize(), // 8224 for 
+                    _handler->getVitaHeaderSize(),
+                    _handler->getVitaTailSize(),
                     true,
                     false,
                     "0.0.0.0",
@@ -328,43 +405,82 @@ private:
         CyberRadioModule* _this = (CyberRadioModule*)ctx;
         float menuWidth = ImGui::GetContentRegionAvailWidth();
                 
-        ImGui::SetNextItemWidth(menuWidth);
-        if(ImGui::InputText(CONCAT("##_ip_addr_",_this->name), _this->hostname, 1023))
+        ImGui::LeftLabel("IP Addr");
+        ImGui::SetNextItemWidth(menuWidth - ImGui::GetCursorPosX());
+        if(ImGui::InputText(CONCAT("##_ip_addr_",_this->name), _this->_hostname, 1023))
         {
             config.acquire();
-            config.conf[_this->name]["host"] = std::string(_this->hostname);
+            config.conf[_this->name]["host"] = std::string(_this->_hostname);
             config.release();
         }
-        ImGui::SetNextItemWidth(menuWidth);
-        if(ImGui::InputText(CONCAT("##_streaming_intf_",_this->name), _this->_streamIntf, 1023))
+        ImGui::LeftLabel("Stream Intf");
+        ImGui::SetNextItemWidth(menuWidth - ImGui::GetCursorPosX());
+        if (ImGui::Combo(CONCAT("##_streaming_intf_", _this->name), &_this->intfId,  _this->_interfaceTxtList.c_str()))
+        //if(ImGui::InputText(CONCAT("##_streaming_intf_",_this->name), _this->_streamIntf, 1023))
         {
+            _this->_streamIntf = _this->_interfaceVector.at(_this->intfId);
+            spdlog::info("Setting Streaming intf: {0}", _this->_streamIntf);
             config.acquire();
-            config.conf[_this->name]["intf"] = std::string(_this->_streamIntf);
-            config.release();
-            
+            config.conf[_this->name]["intf"] = _this->_streamIntf;
+            config.release();            
         }
-        // If no device is selected, draw only the refresh button
-        //if (ImGui::Button(CONCAT("Refresh##_dev_select_", _this->name), ImVec2(menuWidth, 0))) {
-        //    _this->refresh();
-        //    _this->selectDevice(config.conf["device"]);
-        //}
-        ImGui::SetNextItemWidth(menuWidth);
+        ImGui::LeftLabel("Radio Type");
+        ImGui::SetNextItemWidth(menuWidth - ImGui::GetCursorPosX());
         if (ImGui::Combo(CONCAT("##_dev_select_", _this->name), &_this->devId,  _this->txtDevList.c_str())) {
             _this->selectDevice(_this->devList[_this->devId]);
         }
-        ImGui::SetNextItemWidth(menuWidth);
+        ImGui::LeftLabel("Sample Rate");
+        ImGui::SetNextItemWidth(menuWidth - ImGui::GetCursorPosX());
         if (ImGui::Combo(CONCAT("##_sr_select_", _this->name), &_this->srId, _this->txtSrList.c_str())) {
-            spdlog::info("CyberRadioSource: SR: {0} {1}", _this->srId, _this->_rateSet[_this->srId]);
-            _this->selectSampleRate(_this->_rateSet[_this->srId]);
+            spdlog::info("CyberRadioSource: SR: ID: {0} VALUE: {1}", _this->srId, _this->sampleRates.at(_this->srId));
+            _this->selectSampleRate(_this->sampleRates.at(_this->srId));
             //_this->_handler->setSampleRate(_this->sampleRate);            
+        }
+        ImGui::LeftLabel("Channel");
+        ImGui::SetNextItemWidth(menuWidth - ImGui::GetCursorPosX());
+        if (ImGui::Combo(CONCAT("##_ch_select_", _this->name), &_this->chId, _this->_channelsTxtList.c_str())) {
+            spdlog::info("CyberRadioSource: Channel: ID: {0} VALUE: {1}", _this->chId, _this->chId);
+            _this->selectSourceChannel( _this->chId );
+            //_this->_handler->setSampleRate(_this->sampleRate);            
+        }
+        // If no device is selected, draw only the refresh button
+        if (ImGui::Button(CONCAT("Save Config##_dev_select_", _this->name), ImVec2(menuWidth, 0))) {
+            //_this->refresh();
+            //_this->selectDevice(config.conf["device"]);
+            _this->saveCurrent();
         }
     }
     static void tune(double freq, void* ctx) {
         CyberRadioModule* _this = (CyberRadioModule*)ctx;
+        // 404656000.0
+        int freq_int = (uint64_t)freq;
+        spdlog::info("CyberRadioModule: Tune Requested for: {0}MHz", freq_int);
         if( _this->_connected ){
-            _this->_handler->setTunerFrequency(0, freq );
+            if ( freq_int % 10000000 == 0 ){
+                _this->_handler->setTunerFrequency(0, freq );
+                _this->_currentTunedFreq = (double)freq_int;
+                spdlog::info("CyberRadioModule '{0}': Tuner: {1}!", _this->name, freq);
+            } 
+            else {
+                double temp = 0;
+                if( freq < _this->_currentTunedFreq ){
+                    // 128 < 130 so tune -
+                    temp = _this->_currentTunedFreq - freq;
+                    temp *= -1;
+                    spdlog::info("CyberRadioModule '{0}': WBDDC: {1} = {2} - {3}", _this->name, temp, _this->_currentTunedFreq,freq);
+                } else {
+                    // freq > tuned
+                    // 131 > 130, pos offset.
+                    temp = freq - _this->_currentTunedFreq;
+                    spdlog::info("CyberRadioModule '{0}': WBDDC: {1} = {2} - {3}", _this->name, temp, freq, _this->_currentTunedFreq);
+                }
+                // get the integer portion.
+                spdlog::info("CyberRadioModule '{0}': WBDDC: {1}", _this->name, temp);
+                _this->_handler->setWbddcFrequency(0, temp);
+            }
             _this->freq = freq;
-            spdlog::info("CyberRadioModule '{0}': Tune: {1}!", _this->name, freq);
+            
+            spdlog::info("CyberRadioModule '{0}': Tune: {1} :: {2}!", _this->name, freq, _this->_currentTunedFreq);
         }
         
     }
@@ -373,7 +489,7 @@ private:
     {
         while ( this->running ) {
             LibCyberRadio::Vita49PacketVector packets;
-            int blockSize = this->sampleRate / (this->_handler->getVitaPayloadSize());
+            int blockSize = 2000;
             int samples = this->_handler->getVitaPayloadSize()/4;
             int payload_size = samples * 4;
             //spdlog::info("RX: Requested {0} Packets", blockSize);
@@ -383,18 +499,36 @@ private:
             
             for( auto& it : packets )
             {
-                int16_t* inBuf = new int16_t[samples * 2];
-                memcpy(inBuf, it.sampleData, samples * 2 * sizeof(int16_t));
-                //printf("Processing: %d\n", y);
                 volk_16i_s32f_convert_32f((float *)this->stream.writeBuf, 
-                                        inBuf, 
+                                        it.sampleData, 
                                         32768.0, 
                                         2*samples);
                 this->stream.swap(samples);
-                y++;
-                delete inBuf;
             }
+#if 0            
+            std::stringstream st;
+            st << std::hex << packets.at(0).frameTrailerWord;
+            std::string g( st.str() );
+            //spdlog::info("{0}", g);
+
+            try {
+                spdlog::info("{0}",packets.at(0).dump().c_str());
+            } catch (int e) {
+                spdlog::info("No Packet Availible");
+            }
+#endif
         }
+    }
+
+    void saveCurrent() {
+        json conf;
+        conf["sampleRate"] = this->sampleRate;
+        int i = 0;
+        conf["host"] = this->_hostname;
+        conf["streamingIf"] = this->_streamIntf;
+        config.acquire();
+        config.conf["devices"][this->name] = conf;
+        config.release(true);
     }
  
 
@@ -405,8 +539,8 @@ private:
     bool enabled = true;
     dsp::stream<dsp::complex_t> stream;
     SourceManager::SourceHandler handler;
-    char hostname[1024];
-    char _streamIntf[1024];
+    char _hostname[1024];
+    std::string _streamIntf;
     std::string txtDevList;
     std::string txtSrList;
     std::thread workerThread;
@@ -415,17 +549,21 @@ private:
     LibCyberRadio::VitaIqSource *_stream;
     std::map<int, double> _rateSet;
     int devId = -1;
+    int intfId = -1;
     double freq;
     double sampleRate;
     bool running = false;
     bool hasAgc = false;
     bool agc = false;
     std::vector<double> sampleRates;
+    int _numChannels;
     int srId = -1;
+    int chId = -1;
     float* uiGains;
     int channelCount = 1;
     int channelId = 0;
     int uiAntennaId = 0;
+    double _currentTunedFreq;
     std::vector<std::string> antennaList;
     std::string txtAntennaList;
     std::vector<std::string> gainList;
@@ -433,6 +571,12 @@ private:
     std::vector<float> bandwidthList;
     std::string txtBwList;
     std::vector<std::string> devList;
+    std::string _interfaceTxtList;
+    std::vector<std::string> _interfaceVector;
+    int _vitaPacketSize;
+    int _vitaSamplesPerPacket;
+    std::string _radioName;
+    std::string _channelsTxtList;
 };
 
 MOD_EXPORT void _INIT_() {
