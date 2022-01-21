@@ -1,4 +1,4 @@
-#include <imgui.h>
+#include <SmGui.h>
 #include <spdlog/spdlog.h>
 #include <module.h>
 #include <gui/gui.h>
@@ -403,20 +403,20 @@ private:
 
     static void menuHandler(void* ctx) {
         CyberRadioModule* _this = (CyberRadioModule*)ctx;
-        float menuWidth = ImGui::GetContentRegionAvailWidth();
+        float menuWidth = SmGui::GetContentRegionAvailWidth();
                 
-        ImGui::LeftLabel("IP Addr");
-        ImGui::SetNextItemWidth(menuWidth - ImGui::GetCursorPosX());
-        if(ImGui::InputText(CONCAT("##_ip_addr_",_this->name), _this->_hostname, 1023))
+        SmGui::LeftLabel("IP Addr");
+        SmGui::SetNextItemWidth(menuWidth - SmGui::GetCursorPosX());
+        if(SmGui::InputText(CONCAT("##_ip_addr_",_this->name), _this->_hostname, 1023))
         {
             config.acquire();
             config.conf[_this->name]["host"] = std::string(_this->_hostname);
             config.release();
         }
-        ImGui::LeftLabel("Stream Intf");
-        ImGui::SetNextItemWidth(menuWidth - ImGui::GetCursorPosX());
-        if (ImGui::Combo(CONCAT("##_streaming_intf_", _this->name), &_this->intfId,  _this->_interfaceTxtList.c_str()))
-        //if(ImGui::InputText(CONCAT("##_streaming_intf_",_this->name), _this->_streamIntf, 1023))
+        SmGui::LeftLabel("Stream Intf");
+        SmGui::SetNextItemWidth(menuWidth - SmGui::GetCursorPosX());
+        if (SmGui::Combo(CONCAT("##_streaming_intf_", _this->name), &_this->intfId,  _this->_interfaceTxtList.c_str()))
+        //if(SmGui::InputText(CONCAT("##_streaming_intf_",_this->name), _this->_streamIntf, 1023))
         {
             _this->_streamIntf = _this->_interfaceVector.at(_this->intfId);
             spdlog::info("Setting Streaming intf: {0}", _this->_streamIntf);
@@ -424,27 +424,27 @@ private:
             config.conf[_this->name]["intf"] = _this->_streamIntf;
             config.release();            
         }
-        ImGui::LeftLabel("Radio Type");
-        ImGui::SetNextItemWidth(menuWidth - ImGui::GetCursorPosX());
-        if (ImGui::Combo(CONCAT("##_dev_select_", _this->name), &_this->devId,  _this->txtDevList.c_str())) {
+        SmGui::LeftLabel("Radio Type");
+        SmGui::SetNextItemWidth(menuWidth - SmGui::GetCursorPosX());
+        if (SmGui::Combo(CONCAT("##_dev_select_", _this->name), &_this->devId,  _this->txtDevList.c_str())) {
             _this->selectDevice(_this->devList[_this->devId]);
         }
-        ImGui::LeftLabel("Sample Rate");
-        ImGui::SetNextItemWidth(menuWidth - ImGui::GetCursorPosX());
-        if (ImGui::Combo(CONCAT("##_sr_select_", _this->name), &_this->srId, _this->txtSrList.c_str())) {
+        SmGui::LeftLabel("Sample Rate");
+        SmGui::SetNextItemWidth(menuWidth - SmGui::GetCursorPosX());
+        if (SmGui::Combo(CONCAT("##_sr_select_", _this->name), &_this->srId, _this->txtSrList.c_str())) {
             spdlog::info("CyberRadioSource: SR: ID: {0} VALUE: {1}", _this->srId, _this->sampleRates.at(_this->srId));
             _this->selectSampleRate(_this->sampleRates.at(_this->srId));
             //_this->_handler->setSampleRate(_this->sampleRate);            
         }
-        ImGui::LeftLabel("Channel");
-        ImGui::SetNextItemWidth(menuWidth - ImGui::GetCursorPosX());
-        if (ImGui::Combo(CONCAT("##_ch_select_", _this->name), &_this->chId, _this->_channelsTxtList.c_str())) {
+        SmGui::LeftLabel("Channel");
+        SmGui::SetNextItemWidth(menuWidth - SmGui::GetCursorPosX());
+        if (SmGui::Combo(CONCAT("##_ch_select_", _this->name), &_this->chId, _this->_channelsTxtList.c_str())) {
             spdlog::info("CyberRadioSource: Channel: ID: {0} VALUE: {1}", _this->chId, _this->chId);
             _this->selectSourceChannel( _this->chId );
             //_this->_handler->setSampleRate(_this->sampleRate);            
         }
         // If no device is selected, draw only the refresh button
-        if (ImGui::Button(CONCAT("Save Config##_dev_select_", _this->name), ImVec2(menuWidth, 0))) {
+        if (SmGui::Button(CONCAT("Save Config##_dev_select_", _this->name), ImVec2(menuWidth, 0))) {
             //_this->refresh();
             //_this->selectDevice(config.conf["device"]);
             _this->saveCurrent();

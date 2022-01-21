@@ -1,0 +1,241 @@
+{
+    "name": "USA",
+    "country_name": "United States of America",
+    "country_code": "US",
+    "author_name": "Brandon Smith",
+    "author_url": "https://github.com/blsmith5728",
+    "bands": [
+        {
+            "name": "UMTS",
+            "type": "cellular",
+            "start" : 874300000, 
+            "end" : 879300000
+        },
+        {
+            "name": "LTE Band 1",
+            "start": 2110000000,
+            "end": 2170000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 2",
+            "start": 1930000000,
+            "end": 1990000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 3",
+            "start": 1805000000,
+            "end": 1880000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 4",
+            "start": 2110000000,
+            "end": 2155000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 5",
+            "start": 869000000,
+            "end": 894000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 6",
+            "start": 875000000,
+            "end": 885000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 7",
+            "start": 2620000000,
+            "end": 2690000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 8",
+            "start": 925000000,
+            "end": 960000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 9",
+            "start": 1844900000,
+            "end": 1879900000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 10",
+            "start": 2110000000,
+            "end": 2170000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 11",
+            "start": 1475900000,
+            "end": 1500900000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 12",
+            "start": 728000000,
+            "end": 746000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 13",
+            "start": 746000000,
+            "end": 756000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 14",
+            "start": 758000000,
+            "end": 768000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 15",
+            "start": 2600000000,
+            "end": 2620000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 16",
+            "start": 2585000000,
+            "end": 2600000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 17",
+            "start": 734000000,
+            "end": 746000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 18",
+            "start": 860000000,
+            "end": 875000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 19",
+            "start": 875000000,
+            "end": 890000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 20",
+            "start": 791000000,
+            "end": 821000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 21",
+            "start": 1495500000,
+            "end": 1510900000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 22",
+            "start": 3510000000,
+            "end": 3600000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 23",
+            "start": 2180000000,
+            "end": 2200000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 24",
+            "start": 1525000000,
+            "end": 1559000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 25",
+            "start": 1930000000,
+            "end": 1995000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 26",
+            "start": 859000000,
+            "end": 894000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 27",
+            "start": 852000000,
+            "end": 869000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 28",
+            "start": 758000000,
+            "end": 803000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 30",
+            "start": 2350000000,
+            "end": 2360000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 31",
+            "start": 462500000,
+            "end": 467500000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 32",
+            "start": 1452000000,
+            "end": 1496000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 65",
+            "start": 2110000000,
+            "end": 2200000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 66",
+            "start": 2110000000,
+            "end": 2200000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 67",
+            "start": 738000000,
+            "end": 758000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 68",
+            "start": 753000000,
+            "end": 783000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 69",
+            "start": 2570000000,
+            "end": 2620000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 70",
+            "start": 1995000000,
+            "end": 2020000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 71",
+            "start": 617000000,
+            "end": 652000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 72",
+            "start": 461000000,
+            "end": 466000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 73",
+            "start": 460000000,
+            "end": 465000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 74",
+            "start": 1475000000,
+            "end": 1518000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 75",
+            "start": 1432000000,
+            "end": 1517000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 76",
+            "start": 1427000000,
+            "end": 1432000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 85",
+            "start": 728000000,
+            "end": 746000000,
+            "type": "cellular"
+        }, {
+            "name": "LTE Band 87",
+            "start": 420000000,
+            "end": 425000000,
+            "type": "cellular"
+        }
+    ]
+}
