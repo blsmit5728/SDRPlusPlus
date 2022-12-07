@@ -461,21 +461,22 @@ private:
                 spdlog::info("CyberRadioModule '{0}': Tuner: {1}!", _this->name, freq);
             } 
             else {
-                double temp = 0;
-                if( freq < _this->_currentTunedFreq ){
-                    // 128 < 130 so tune -
-                    temp = _this->_currentTunedFreq - freq;
-                    temp *= -1;
-                    spdlog::info("CyberRadioModule '{0}': WBDDC: {1} = {2} - {3}", _this->name, temp, _this->_currentTunedFreq,freq);
+                int remainder = (freq_int % 10000000);
+                int freq_tens = freq_int - remainder;
+                _this->_handler->setTunerFrequency(0, (double)freq_tens);
+                _this->_currentTunedFreq = (double)freq_tens;
+                double wbddc_offset = 0;
+                if ( freq > _this->_currentTunedFreq )
+                {
+                    wbddc_offset = freq - _this->_currentTunedFreq;
+                    spdlog::info("CyberRadioModule '{0}': WBDDC: {1} = {2} - {3}", _this->name, wbddc_offset, freq, _this->_currentTunedFreq);
                 } else {
-                    // freq > tuned
-                    // 131 > 130, pos offset.
-                    temp = freq - _this->_currentTunedFreq;
-                    spdlog::info("CyberRadioModule '{0}': WBDDC: {1} = {2} - {3}", _this->name, temp, freq, _this->_currentTunedFreq);
+                    wbddc_offset = _this->_currentTunedFreq - freq;
+                    wbddc_offset *= -1;
+                    spdlog::info("CyberRadioModule '{0}': WBDDC: {1} = {2} - {3}", _this->name, wbddc_offset, _this->_currentTunedFreq,freq);
                 }
-                // get the integer portion.
-                spdlog::info("CyberRadioModule '{0}': WBDDC: {1}", _this->name, temp);
-                _this->_handler->setWbddcFrequency(0, temp);
+                spdlog::info("CyberRadioModule '{0}': WBDDC: {1}", _this->name, wbddc_offset);
+                _this->_handler->setWbddcFrequency(0, wbddc_offset);
             }
             _this->freq = freq;
             
@@ -520,6 +521,7 @@ private:
     }
 
     void saveCurrent() {
+        spdlog::info("CyberRadioModule '{0}' Save Called", this->name);
         json conf;
         conf["sampleRate"] = this->sampleRate;
         int i = 0;
@@ -528,6 +530,7 @@ private:
         config.acquire();
         config.conf["devices"][this->name] = conf;
         config.release(true);
+        config.save(true);
     }
  
 
