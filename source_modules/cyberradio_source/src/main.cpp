@@ -1,4 +1,3 @@
-#include <SmGui.h>
 #include <spdlog/spdlog.h>
 #include <module.h>
 #include <gui/gui.h>
@@ -6,7 +5,8 @@
 #include <signal_path/signal_path.h>
 #include <core.h>
 #include <gui/style.h>
-#include <options.h>
+#include <gui/smgui.h>
+#include <utils/optionlist.h>
 #include <LibCyberRadio/Driver/Driver.h>
 #include "LibCyberRadio/Common/VitaIqSource.h"
 #include <vector>
@@ -403,10 +403,9 @@ private:
 
     static void menuHandler(void* ctx) {
         CyberRadioModule* _this = (CyberRadioModule*)ctx;
-        float menuWidth = SmGui::GetContentRegionAvailWidth();
                 
         SmGui::LeftLabel("IP Addr");
-        SmGui::SetNextItemWidth(menuWidth - SmGui::GetCursorPosX());
+        SmGui::FillWidth();
         if(SmGui::InputText(CONCAT("##_ip_addr_",_this->name), _this->_hostname, 1023))
         {
             config.acquire();
@@ -414,7 +413,7 @@ private:
             config.release();
         }
         SmGui::LeftLabel("Stream Intf");
-        SmGui::SetNextItemWidth(menuWidth - SmGui::GetCursorPosX());
+        SmGui::FillWidth();
         if (SmGui::Combo(CONCAT("##_streaming_intf_", _this->name), &_this->intfId,  _this->_interfaceTxtList.c_str()))
         //if(SmGui::InputText(CONCAT("##_streaming_intf_",_this->name), _this->_streamIntf, 1023))
         {
@@ -425,26 +424,26 @@ private:
             config.release();            
         }
         SmGui::LeftLabel("Radio Type");
-        SmGui::SetNextItemWidth(menuWidth - SmGui::GetCursorPosX());
+        SmGui::FillWidth();
         if (SmGui::Combo(CONCAT("##_dev_select_", _this->name), &_this->devId,  _this->txtDevList.c_str())) {
             _this->selectDevice(_this->devList[_this->devId]);
         }
         SmGui::LeftLabel("Sample Rate");
-        SmGui::SetNextItemWidth(menuWidth - SmGui::GetCursorPosX());
+        SmGui::FillWidth();
         if (SmGui::Combo(CONCAT("##_sr_select_", _this->name), &_this->srId, _this->txtSrList.c_str())) {
             spdlog::info("CyberRadioSource: SR: ID: {0} VALUE: {1}", _this->srId, _this->sampleRates.at(_this->srId));
             _this->selectSampleRate(_this->sampleRates.at(_this->srId));
             //_this->_handler->setSampleRate(_this->sampleRate);            
         }
         SmGui::LeftLabel("Channel");
-        SmGui::SetNextItemWidth(menuWidth - SmGui::GetCursorPosX());
+        SmGui::FillWidth();
         if (SmGui::Combo(CONCAT("##_ch_select_", _this->name), &_this->chId, _this->_channelsTxtList.c_str())) {
             spdlog::info("CyberRadioSource: Channel: ID: {0} VALUE: {1}", _this->chId, _this->chId);
             _this->selectSourceChannel( _this->chId );
             //_this->_handler->setSampleRate(_this->sampleRate);            
         }
         // If no device is selected, draw only the refresh button
-        if (SmGui::Button(CONCAT("Save Config##_dev_select_", _this->name), ImVec2(menuWidth, 0))) {
+        if (SmGui::Button(CONCAT("Save Config##_dev_select_", _this->name))) {
             //_this->refresh();
             //_this->selectDevice(config.conf["device"]);
             _this->saveCurrent();
@@ -580,7 +579,7 @@ private:
 };
 
 MOD_EXPORT void _INIT_() {
-    config.setPath(options::opts.root + "/cyberradio_source_config.json");
+    config.setPath(core::args["root"].s() + "/cyberradio_source_config.json");
     json defConf;
     defConf["device"] = "";
     defConf["devices"] = json({});
