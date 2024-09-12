@@ -1,5 +1,5 @@
 #include <imgui.h>
-#include <spdlog/spdlog.h>
+#include <utils/flog.h>
 #include <module.h>
 #include <gui/gui.h>
 #include <signal_path/signal_path.h>
@@ -9,7 +9,12 @@
 #include <gui/smgui.h>
 #include <utils/optionlist.h>
 #include <codecvt>
+#include <locale>
 #include <aaroniartsaapi.h>
+
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 #define CONCAT(a, b) ((std::string(a) + b).c_str())
 
@@ -28,10 +33,13 @@ public:
     SpectranSourceModule(std::string name) {
         this->name = name;
 
-        if (AARTSAAPI_Init(AARTSAAPI_MEMORY_MEDIUM) != AARTSAAPI_OK) {
+        AARTSAAPI_Result res;
+        if ((res = AARTSAAPI_Init(AARTSAAPI_MEMORY_MEDIUM)) != AARTSAAPI_OK) {
+            flog::error("Failed to initialize the RTSAAPI: {}", (uint32_t)res);
             return;
         }
-        if (AARTSAAPI_Open(&api) != AARTSAAPI_OK) {
+        if ((res = AARTSAAPI_Open(&api)) != AARTSAAPI_OK) {
+            flog::error("Failed to open the RTSAAPI: {}", (uint32_t)res);
             return;
         }
 
@@ -42,6 +50,12 @@ public:
         agcModeList.define("Off", L"manual");
         agcModeList.define("Peak", L"peak");
         agcModeList.define("Power", L"power");
+
+        clockList.define("Consumer", L"Consumer");
+        clockList.define("Internal", L"Oscillator");
+        clockList.define("GPSDO", L"GPS");
+        clockList.define("PPS", L"PPS");
+        clockList.define("10MHz Ref", L"10MHz");
 
         samplerate.effective = 1000000.0;
 
@@ -124,7 +138,7 @@ public:
 
         // Open device
         if (AARTSAAPI_OpenDevice(&api, &dev, L"spectranv6/raw", devList[devId].c_str()) != AARTSAAPI_OK) {
-            spdlog::error("Failed to open device");
+            flog::error("Failed to open device");
             selectedSerial.clear();
             return;
         }
@@ -139,7 +153,7 @@ public:
         AARTSAAPI_ConfigGetInfo(&dev, &config, &clockInfo);
 
         // Enumerate valid samplerates
-        spdlog::warn("{0}", clockInfo.disabledOptions);
+        flog::warn("{0}", clockInfo.disabledOptions);
         std::vector<SRCombo> srs;
         for (int i = 0; i < 4; i++) {
             if ((clockInfo.disabledOptions >> i) & 1) { continue; }
@@ -183,7 +197,6 @@ public:
 
         // Set samplerate
         samplerate = sampleRateList.value(srId);
-        core::setInputSampleRate(samplerate.effective);
 
         // Close device
         AARTSAAPI_CloseDevice(&api, &dev);
@@ -209,12 +222,12 @@ private:
     static void menuSelected(void* ctx) {
         SpectranSourceModule* _this = (SpectranSourceModule*)ctx;
         core::setInputSampleRate(_this->samplerate.effective);
-        spdlog::info("SpectranSourceModule '{0}': Menu Select!", _this->name);
+        flog::info("SpectranSourceModule '{0}': Menu Select!", _this->name);
     }
 
     static void menuDeselected(void* ctx) {
         SpectranSourceModule* _this = (SpectranSourceModule*)ctx;
-        spdlog::info("SpectranSourceModule '{0}': Menu Deselect!", _this->name);
+        flog::info("SpectranSourceModule '{0}': Menu Deselect!", _this->name);
     }
 
     static void start(void* ctx) {
@@ -223,7 +236,7 @@ private:
         if (_this->selectedSerial.empty()) { return; }
 
         if (AARTSAAPI_OpenDevice(&_this->api, &_this->dev, L"spectranv6/raw", _this->devList[_this->devId].c_str()) != AARTSAAPI_OK) {
-            spdlog::error("Failed to open device");
+            flog::error("Failed to open device");
             return;
         }
 
@@ -260,12 +273,12 @@ private:
         _this->updateAmps();
 
         if (AARTSAAPI_ConnectDevice(&_this->dev) != AARTSAAPI_OK) {
-            spdlog::error("Failed to connect device");
+            flog::error("Failed to connect device");
             return;
         }
 
         if (AARTSAAPI_StartDevice(&_this->dev) != AARTSAAPI_OK) {
-            spdlog::error("Failed to start device");
+            flog::error("Failed to start device");
             return;
         }
 
@@ -273,16 +286,16 @@ private:
         AARTSAAPI_Packet pkt = { sizeof(AARTSAAPI_Packet) };
         while (AARTSAAPI_GetPacket(&_this->dev, 0, 0, &pkt) == AARTSAAPI_EMPTY) {
 #ifdef _WIN32
-                Sleep(1);
+            Sleep(1);
 #else
-                usleep(1000);
+            usleep(1000);
 #endif
         }
 
         _this->workerThread = std::thread(&SpectranSourceModule::worker, _this);
 
         _this->running = true;
-        spdlog::info("SpectranSourceModule '{0}': Start!", _this->name);
+        flog::info("SpectranSourceModule '{0}': Start!", _this->name);
     }
 
     static void stop(void* ctx) {
@@ -301,7 +314,7 @@ private:
 
         _this->stream.clearWriteStop();
 
-        spdlog::info("SpectranSourceModule '{0}': Stop!", _this->name);
+        flog::info("SpectranSourceModule '{0}': Stop!", _this->name);
     }
 
     static void tune(double freq, void* ctx) {
@@ -312,7 +325,7 @@ private:
             AARTSAAPI_ConfigSetFloat(&_this->dev, &config, freq);
         }
         _this->freq = freq;
-        spdlog::info("SpectranSourceModule '{0}': Tune: {1}!", _this->name, freq);
+        flog::info("SpectranSourceModule '{0}': Tune: {1}!", _this->name, freq);
     }
 
     static void menuHandler(void* ctx) {
@@ -322,11 +335,12 @@ private:
 
         SmGui::FillWidth();
         SmGui::ForceSync();
-        if (ImGui::Combo(CONCAT("##_spectran_dev_", _this->name), &_this->devId, _this->devList.txt)) {
-            
+        if (SmGui::Combo(CONCAT("##_spectran_dev_", _this->name), &_this->devId, _this->devList.txt)) {
+            _this->selectSerial(_this->devList.key(_this->devId));
+            core::setInputSampleRate(_this->samplerate.effective);
         }
-        // TODO: SR sel
-        if (ImGui::Combo(CONCAT("##_spectran_sr_", _this->name), &_this->srId, _this->sampleRateList.txt)) {
+        
+        if (SmGui::Combo(CONCAT("##_spectran_sr_", _this->name), &_this->srId, _this->sampleRateList.txt)) {
             _this->samplerate = _this->sampleRateList.value(_this->srId);
             core::setInputSampleRate(_this->samplerate.effective);
         }
@@ -344,7 +358,7 @@ private:
 
         SmGui::LeftLabel("USB Compression");
         SmGui::FillWidth();
-        if (ImGui::Combo(CONCAT("##_spectran_comp_", _this->name), &_this->compId, _this->compList.txt)) {
+        if (SmGui::Combo(CONCAT("##_spectran_comp_", _this->name), &_this->compId, _this->compList.txt)) {
             if (_this->running) {
                 AARTSAAPI_Config config;
                 AARTSAAPI_ConfigFind(&_this->dev, &_this->croot, &config, L"device/usbcompression");
@@ -354,7 +368,7 @@ private:
 
         SmGui::LeftLabel("AGC Mode");
         SmGui::FillWidth();
-        if (ImGui::Combo(CONCAT("##_spectran_agc_", _this->name), &_this->agcModeId, _this->agcModeList.txt)) {
+        if (SmGui::Combo(CONCAT("##_spectran_agc_", _this->name), &_this->agcModeId, _this->agcModeList.txt)) {
             if (_this->running) {
                 AARTSAAPI_Config config;
                 AARTSAAPI_ConfigFind(&_this->dev, &_this->croot, &config, L"device/gaincontrol");
@@ -365,7 +379,7 @@ private:
         if (_this->agcModeId) { SmGui::BeginDisabled(); }
         SmGui::LeftLabel("Ref Level");
         SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_spectran_ref_", _this->name), &_this->refLevel, -20.0f, 10.0f, 0.5f, SmGui::FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
+        if (SmGui::SliderFloatWithSteps(CONCAT("##_spectran_ref_", _this->name), &_this->refLevel, _this->minRef, _this->maxRef, _this->refStep, SmGui::FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
             if (_this->running) {
                 AARTSAAPI_Config config;
                 AARTSAAPI_ConfigFind(&_this->dev, &_this->croot, &config, L"main/reflevel");
@@ -374,13 +388,13 @@ private:
         }
         if (_this->agcModeId) { SmGui::EndDisabled(); }
 
-        if (ImGui::Checkbox(CONCAT("Amp##_spectran_amp_", _this->name), &_this->amp)) {
+        if (SmGui::Checkbox(CONCAT("Amp##_spectran_amp_", _this->name), &_this->amp)) {
             if (_this->running) {
                 _this->updateAmps();
             }
         }
 
-        if (ImGui::Checkbox(CONCAT("Preamp##_spectran_preamp_", _this->name), &_this->preAmp)) {
+        if (SmGui::Checkbox(CONCAT("Preamp##_spectran_preamp_", _this->name), &_this->preAmp)) {
             if (_this->running) {
                 _this->updateAmps();
             }
@@ -405,7 +419,7 @@ private:
             if (res != AARTSAAPI_OK) { break; }
 
             if (pkt.num > STREAM_BUFFER_SIZE) {
-                spdlog::error("Buffer too big!!!!");
+                flog::error("Buffer too big!!!!");
                 continue;
             }
 
@@ -436,6 +450,25 @@ private:
         else {
             AARTSAAPI_ConfigSetString(&dev, &config, L"None");
         }
+        updateRef();
+    }
+
+    void updateRef() {
+        // Get and update bounds
+        AARTSAAPI_Config config = {};
+        AARTSAAPI_ConfigInfo refInfo = {};
+        auto res = AARTSAAPI_ConfigFind(&dev, &croot, &config, L"main/reflevel");
+        flog::debug("Res A: {}", res);
+        res = AARTSAAPI_ConfigGetInfo(&dev, &config, &refInfo);
+        flog::debug("Res B: {}", res);
+        minRef = refInfo.minValue;
+        maxRef = refInfo.maxValue;
+        refStep = refInfo.stepValue;
+        flog::debug("Gain: {} -> {}", refInfo.minValue, refInfo.maxValue);
+        refLevel = std::clamp<float>(refLevel, minRef, maxRef);
+
+        // Apply new ref level
+        AARTSAAPI_ConfigSetFloat(&dev, &config, refLevel);
     }
 
     const double clockRates[4] = {
@@ -476,9 +509,12 @@ private:
     float refLevel = -20.0f;
     bool amp = false;
     bool preAmp = false;
+    float minRef = -20.0f;
+    float maxRef = 10.0f;
+    float refStep = 0.5;
 
     struct SRCombo {
-        bool operator==(const SRCombo& b) {
+        bool operator==(const SRCombo& b) const {
             return baseId == b.baseId && decimId == b.decimId;
         }
 
@@ -493,6 +529,7 @@ private:
     OptionList<std::string, SRCombo> sampleRateList;
     OptionList<std::string, std::wstring> compList;
     OptionList<std::string, std::wstring> agcModeList;
+    OptionList<std::string, std::wstring> clockList;
 
     AARTSAAPI_Handle api;
     AARTSAAPI_Device dev;

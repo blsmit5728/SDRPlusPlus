@@ -1,6 +1,7 @@
 #include <utils/networking.h>
 #include <assert.h>
-#include <spdlog/spdlog.h>
+#include <utils/flog.h>
+#include <stdexcept>
 
 namespace net {
 
@@ -319,7 +320,7 @@ namespace net {
                 }
                 entry.handler(std::move(client), entry.ctx);
             }
-            catch (std::exception e) {
+            catch (const std::exception& e) {
                 listening = false;
                 return;
             }

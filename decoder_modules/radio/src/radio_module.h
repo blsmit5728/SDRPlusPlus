@@ -12,6 +12,7 @@
 #include <dsp/multirate/rational_resampler.h>
 #include <dsp/filter/deephasis.h>
 #include <core.h>
+#include <stdint.h>
 #include <utils/optionlist.h>
 #include "radio_interface.h"
 #include "demod.h"
@@ -321,7 +322,7 @@ private:
         auto startTime = std::chrono::high_resolution_clock::now();
         demod::Demodulator* demod = instantiateDemod(id);
         if (!demod) {
-            spdlog::error("Demodulator {0} not implemented", id);
+            flog::error("Demodulator {0} not implemented", (int)id);
             return;
         }
         selectedDemodID = id;
@@ -332,7 +333,7 @@ private:
         config.conf[name]["selectedDemodId"] = id;
         config.release(true);
         auto endTime = std::chrono::high_resolution_clock::now();
-        spdlog::warn("Demod switch took {0} us", (std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime)).count());
+        flog::warn("Demod switch took {0} us", (int64_t)((std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime)).count()));
     }
 
     void selectDemod(demod::Demodulator* demod) {
@@ -426,7 +427,7 @@ private:
         // Configure noise blanker
         nb.setRate(500.0 / ifSamplerate);
         setNBLevel(nbLevel);
-        setNBEnabled(nbAllowed&& nbEnabled);
+        setNBEnabled(nbAllowed && nbEnabled);
 
         // Configure FM IF Noise Reduction
         setIFNRPreset((selectedDemodID == RADIO_DEMOD_NFM) ? ifnrPresets[fmIFPresetId] : IFNR_PRESET_BROADCAST);
@@ -596,14 +597,16 @@ private:
 
     static void moduleInterfaceHandler(int code, void* in, void* out, void* ctx) {
         RadioModule* _this = (RadioModule*)ctx;
-        if (!_this->enabled || !_this->selectedDemod) { return; }
+
+        // If no demod is selected, reject the command
+        if (!_this->selectedDemod) { return; }
 
         // Execute commands
         if (code == RADIO_IFACE_CMD_GET_MODE && out) {
             int* _out = (int*)out;
             *_out = _this->selectedDemodID;
         }
-        else if (code == RADIO_IFACE_CMD_SET_MODE && in) {
+        else if (code == RADIO_IFACE_CMD_SET_MODE && in && _this->enabled) {
             int* _in = (int*)in;
             _this->selectDemodByID((DemodID)*_in);
         }
@@ -611,7 +614,7 @@ private:
             float* _out = (float*)out;
             *_out = _this->bandwidth;
         }
-        else if (code == RADIO_IFACE_CMD_SET_BANDWIDTH && in) {
+        else if (code == RADIO_IFACE_CMD_SET_BANDWIDTH && in && _this->enabled) {
             float* _in = (float*)in;
             if (_this->bandwidthLocked) { return; }
             _this->setBandwidth(*_in);
@@ -620,7 +623,7 @@ private:
             bool* _out = (bool*)out;
             *_out = _this->squelchEnabled;
         }
-        else if (code == RADIO_IFACE_CMD_SET_SQUELCH_ENABLED && in) {
+        else if (code == RADIO_IFACE_CMD_SET_SQUELCH_ENABLED && in && _this->enabled) {
             bool* _in = (bool*)in;
             _this->setSquelchEnabled(*_in);
         }
@@ -628,7 +631,7 @@ private:
             float* _out = (float*)out;
             *_out = _this->squelchLevel;
         }
-        else if (code == RADIO_IFACE_CMD_SET_SQUELCH_LEVEL && in) {
+        else if (code == RADIO_IFACE_CMD_SET_SQUELCH_LEVEL && in && _this->enabled) {
             float* _in = (float*)in;
             _this->setSquelchLevel(*_in);
         }

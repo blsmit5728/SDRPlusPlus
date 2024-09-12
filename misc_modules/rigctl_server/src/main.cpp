@@ -131,11 +131,11 @@ private:
             std::lock_guard lck(_this->vfoMtx);
             if (ImGui::Combo(CONCAT("##_rigctl_srv_vfo_", _this->name), &_this->vfoId, _this->vfoNamesTxt.c_str())) {
                 _this->selectVfoByName(_this->vfoNames[_this->vfoId], false);
-            }
-            if (!_this->selectedVfo.empty()) {
-                config.acquire();
-                config.conf[_this->name]["vfo"] = _this->selectedVfo;
-                config.release(true);
+                if (!_this->selectedVfo.empty()) {
+                    config.acquire();
+                    config.conf[_this->name]["vfo"] = _this->selectedVfo;
+                    config.release(true);
+                }
             }
         }
 
@@ -145,11 +145,11 @@ private:
             std::lock_guard lck(_this->vfoMtx);
             if (ImGui::Combo(CONCAT("##_rigctl_srv_rec_", _this->name), &_this->recorderId, _this->recorderNamesTxt.c_str())) {
                 _this->selectRecorderByName(_this->recorderNames[_this->recorderId], false);
-            }
-            if (!_this->selectedRecorder.empty()) {
-                config.acquire();
-                config.conf[_this->name]["recorder"] = _this->selectedRecorder;
-                config.release(true);
+                if (!_this->selectedRecorder.empty()) {
+                    config.acquire();
+                    config.conf[_this->name]["recorder"] = _this->selectedRecorder;
+                    config.release(true);
+                }
             }
         }
 
@@ -200,8 +200,8 @@ private:
             listener = net::listen(hostname, port);
             listener->acceptAsync(clientHandler, this);
         }
-        catch (std::exception e) {
-            spdlog::error("Could not start rigctl server: {0}", e.what());
+        catch (const std::exception& e) {
+            flog::error("Could not start rigctl server: {}", e.what());
         }
     }
 
@@ -306,14 +306,14 @@ private:
 
     static void clientHandler(net::Conn _client, void* ctx) {
         SigctlServerModule* _this = (SigctlServerModule*)ctx;
-        //spdlog::info("New client!");
+        //flog::info("New client!");
 
         _this->client = std::move(_client);
         _this->client->readAsync(1024, _this->dataBuf, dataHandler, _this, false);
         _this->client->waitForEnd();
         _this->client->close();
 
-        //spdlog::info("Client disconnected!");
+        //flog::info("Client disconnected!");
 
         _this->listener->acceptAsync(clientHandler, _this);
     }
@@ -332,6 +332,17 @@ private:
 
         _this->client->readAsync(1024, _this->dataBuf, dataHandler, _this, false);
     }
+
+    std::map<int, const char*> radioModeToString = {
+        { RADIO_IFACE_MODE_NFM, "FM" },
+        { RADIO_IFACE_MODE_WFM, "WFM" },
+        { RADIO_IFACE_MODE_AM,  "AM"  },
+        { RADIO_IFACE_MODE_DSB, "DSB" },
+        { RADIO_IFACE_MODE_USB, "USB" },
+        { RADIO_IFACE_MODE_CW,  "CW"  },
+        { RADIO_IFACE_MODE_LSB, "LSB" },
+        { RADIO_IFACE_MODE_RAW, "RAW" }
+    };
 
     void commandHandler(std::string cmd) {
         std::string corr = "";
@@ -371,7 +382,7 @@ private:
             return;
         }
 
-        spdlog::info("Rigctl command: '{0}'", cmd);
+        flog::info("Rigctl command: '{0}'", cmd);
 
         // Otherwise, execute the command
         if (parts[0] == "F" || parts[0] == "\\set_freq") {
@@ -442,38 +453,18 @@ private:
                 pos++;
             }
 
+            const std::string& newModeStr = parts[1];
             float newBandwidth = std::atoi(parts[2].c_str());
-
-            int newMode;
-            if (parts[1] == "FM") {
-                newMode = RADIO_IFACE_MODE_NFM;
-            }
-            else if (parts[1] == "WFM") {
-                newMode = RADIO_IFACE_MODE_WFM;
-            }
-            else if (parts[1] == "AM") {
-                newMode = RADIO_IFACE_MODE_AM;
-            }
-            else if (parts[1] == "DSB") {
-                newMode = RADIO_IFACE_MODE_DSB;
-            }
-            else if (parts[1] == "USB") {
-                newMode = RADIO_IFACE_MODE_USB;
-            }
-            else if (parts[1] == "CW") {
-                newMode = RADIO_IFACE_MODE_CW;
-            }
-            else if (parts[1] == "LSB") {
-                newMode = RADIO_IFACE_MODE_LSB;
-            }
-            else if (parts[1] == "RAW") {
-                newMode = RADIO_IFACE_MODE_RAW;
-            }
-            else {
+            
+            auto it = std::find_if(radioModeToString.begin(), radioModeToString.end(), [&newModeStr](const auto& e) {
+                return e.second == newModeStr;
+            });
+            if (it == radioModeToString.end()) {
                 resp = "RPRT 1\n";
                 client->write(resp.size(), (uint8_t*)resp.c_str());
                 return;
             }
+            int newMode = it->first;
 
             // If tuning is enabled, set the mode and optionally the bandwidth
             if (!selectedVfo.empty() && core::modComManager.getModuleName(selectedVfo) == "radio" && tuningEnabled) {
@@ -492,31 +483,9 @@ private:
             if (!selectedVfo.empty() && core::modComManager.getModuleName(selectedVfo) == "radio") {
                 int mode;
                 core::modComManager.callInterface(selectedVfo, RADIO_IFACE_CMD_GET_MODE, NULL, &mode);
-
-                if (mode == RADIO_IFACE_MODE_NFM) {
-                    resp = "FM\n";
-                }
-                else if (mode == RADIO_IFACE_MODE_WFM) {
-                    resp = "WFM\n";
-                }
-                else if (mode == RADIO_IFACE_MODE_AM) {
-                    resp = "AM\n";
-                }
-                else if (mode == RADIO_IFACE_MODE_DSB) {
-                    resp = "DSB\n";
-                }
-                else if (mode == RADIO_IFACE_MODE_USB) {
-                    resp = "USB\n";
-                }
-                else if (mode == RADIO_IFACE_MODE_CW) {
-                    resp = "CW\n";
-                }
-                else if (mode == RADIO_IFACE_MODE_LSB) {
-                    resp = "LSB\n";
-                }
+                resp = std::string(radioModeToString[mode]) + "\n";
             }
-
-            if (!selectedVfo.empty()) {
+            else if (!selectedVfo.empty()) {
                 resp += std::to_string((int)sigpath::vfoManager.getBandwidth(selectedVfo)) + "\n";
             }
             else {
@@ -690,9 +659,14 @@ private:
                 "0\n" /* RIG_PARM_NONE */;
             client->write(resp.size(), (uint8_t*)resp.c_str());
         }
+        // This get_powerstat stuff is a wordaround for WSJT-X 2.7.0
+        else if (parts[0] == "\\get_powerstat") {
+            resp = "1\n";
+            client->write(resp.size(), (uint8_t*)resp.c_str());
+        }
         else {
             // If command is not recognized, return error
-            spdlog::error("Rigctl client sent invalid command: '{0}'", cmd);
+            flog::error("Rigctl client sent invalid command: '{0}'", cmd);
             resp = "RPRT 1\n";
             client->write(resp.size(), (uint8_t*)resp.c_str());
             return;

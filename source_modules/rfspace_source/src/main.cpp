@@ -1,6 +1,6 @@
 #include <rfspace_client.h>
 #include <imgui.h>
-#include <spdlog/spdlog.h>
+#include <utils/flog.h>
 #include <module.h>
 #include <gui/gui.h>
 #include <signal_path/signal_path.h>
@@ -17,7 +17,7 @@ SDRPP_MOD_INFO{
     /* Name:            */ "rfspace_source",
     /* Description:     */ "RFspace source module for SDR++",
     /* Author:          */ "Ryzerth",
-    /* Version:         */ 0, 1, 0,
+    /* Version:         */ 0, 1, 1,
     /* Max instances    */ 1
 };
 
@@ -85,13 +85,13 @@ private:
         RFSpaceSourceModule* _this = (RFSpaceSourceModule*)ctx;
         core::setInputSampleRate(_this->sampleRate);
         gui::mainWindow.playButtonLocked = !(_this->client && _this->client->isOpen());
-        spdlog::info("RFSpaceSourceModule '{0}': Menu Select!", _this->name);
+        flog::info("RFSpaceSourceModule '{0}': Menu Select!", _this->name);
     }
 
     static void menuDeselected(void* ctx) {
         RFSpaceSourceModule* _this = (RFSpaceSourceModule*)ctx;
         gui::mainWindow.playButtonLocked = false;
-        spdlog::info("RFSpaceSourceModule '{0}': Menu Deselect!", _this->name);
+        flog::info("RFSpaceSourceModule '{0}': Menu Deselect!", _this->name);
     }
 
     static void start(void* ctx) {
@@ -102,7 +102,7 @@ private:
         if (_this->client) { _this->client->start(rfspace::RFSPACE_SAMP_FORMAT_COMPLEX, rfspace::RFSPACE_SAMP_FORMAT_16BIT); }
 
         _this->running = true;
-        spdlog::info("RFSpaceSourceModule '{0}': Start!", _this->name);
+        flog::info("RFSpaceSourceModule '{0}': Start!", _this->name);
     }
 
     static void stop(void* ctx) {
@@ -112,7 +112,7 @@ private:
         if (_this->client) { _this->client->stop(); }
 
         _this->running = false;
-        spdlog::info("RFSpaceSourceModule '{0}': Stop!", _this->name);
+        flog::info("RFSpaceSourceModule '{0}': Stop!", _this->name);
     }
 
     static void tune(double freq, void* ctx) {
@@ -121,7 +121,7 @@ private:
             _this->client->setFrequency(freq);
         }
         _this->freq = freq;
-        spdlog::info("RFSpaceSourceModule '{0}': Tune: {1}!", _this->name, freq);
+        flog::info("RFSpaceSourceModule '{0}': Tune: {1}!", _this->name, freq);
     }
 
     static void menuHandler(void* ctx) {
@@ -154,8 +154,8 @@ private:
                 _this->client = rfspace::connect(_this->hostname, _this->port, &_this->stream);
                 _this->deviceInit();
             }
-            catch (std::exception e) {
-                spdlog::error("Could not connect to SDR: {0}", e.what());
+            catch (const std::exception& e) {
+                flog::error("Could not connect to SDR: {}", e.what());
             }
         }
         else if (connected && SmGui::Button("Disconnect##rfspace_source")) {
@@ -231,7 +231,7 @@ private:
         }
         
         // Create samplerate list
-        auto srs = client->getValidSampleRates();
+        auto srs = client->getSamplerates();
         sampleRates.clear();
         for (auto& sr : srs) {
             sampleRates.define(sr, getBandwdithScaled(sr), sr);
@@ -284,7 +284,7 @@ private:
             client->setPort(rfPorts[rfPortId]);
         }
 
-        spdlog::warn("End");
+        flog::warn("End");
     }
 
     std::string name;
@@ -317,7 +317,7 @@ private:
     dsp::stream<dsp::complex_t> stream;
     SourceManager::SourceHandler handler;
 
-    rfspace::RFspaceClient client;
+    std::shared_ptr<rfspace::Client> client;
 };
 
 MOD_EXPORT void _INIT_() {

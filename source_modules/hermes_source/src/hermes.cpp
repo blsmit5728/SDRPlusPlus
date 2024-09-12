@@ -1,7 +1,14 @@
 #include "hermes.h"
-#include <spdlog/spdlog.h>
+#include <utils/flog.h>
 
 namespace hermes {
+    const int SAMPLERATE_LIST[] = {
+        48000,
+        96000,
+        192000,
+        384000
+    };
+
     Client::Client(std::shared_ptr<net::Socket> sock) {
         this->sock = sock;
 
@@ -33,6 +40,7 @@ namespace hermes {
 
     void Client::setSamplerate(HermesLiteSamplerate samplerate) {
         writeReg(0, (uint32_t)samplerate << 24);
+        blockSize = SAMPLERATE_LIST[samplerate] / 200;
     }
 
     void Client::setFrequency(double freq) {
@@ -71,7 +79,7 @@ namespace hermes {
         if (filt != lastFilt) {
             lastFilt = filt;
 
-            spdlog::warn("Setting filters");
+            flog::warn("Setting filters");
 
             // Set direction and wait for things to be processed
             writeI2C(I2C_PORT_2, 0x20, 0x00, 0x00);
@@ -157,12 +165,15 @@ namespace hermes {
     void Client::worker() {
         uint8_t rbuf[2048];
         MetisUSBPacket* pkt = (MetisUSBPacket*)rbuf;
+        int sampleCount = 0;
+
         while (true) {
             // Wait for a packet or exit if connection closed
             int len = sock->recv(rbuf, 2048);
             if (len <= 0) { break; }
 
             // Ignore anything that's not a USB packet
+            // TODO: Gotta check the endpoint
             if (htons(pkt->hdr.signature) != HERMES_METIS_SIGNATURE || pkt->hdr.type != METIS_PKT_USB) {
                 continue;
             }
@@ -180,12 +191,13 @@ namespace hermes {
                 // Check if this is a response
                 if (hdr->c0 & (1 << 7)) {
                     uint8_t reg = (hdr->c0 >> 1) & 0x3F;
-                    spdlog::warn("Got response! Reg={0}, Seq={1}", reg, htonl(pkt->seq));
+                    flog::warn("Got response! Reg={0}, Seq={1}", reg, (uint32_t)htonl(pkt->seq));
                 }
 
-                // Decode and send IQ to stream
+                // Decode and save IQ to buffer
                 uint8_t* iq = &frame[8];
-                for (int i = 0; i < 63; i++) {
+                dsp::complex_t* writeBuf = &out.writeBuf[sampleCount];
+                for (int i = 0; i < HERMES_SAMPLES_PER_FRAME; i++) {
                     // Convert to 32bit
                     int32_t si = ((uint32_t)iq[(i*8) + 0] << 16) | ((uint32_t)iq[(i*8) + 1] << 8) | (uint32_t)iq[(i*8) + 2];
                     int32_t sq = ((uint32_t)iq[(i*8) + 3] << 16) | ((uint32_t)iq[(i*8) + 4] << 8) | (uint32_t)iq[(i*8) + 5];
@@ -195,17 +207,23 @@ namespace hermes {
                     sq = (sq << 8) >> 8;
 
                     // Convert to float (IQ swapped for some reason)
-                    out.writeBuf[i].im = (float)si / (float)0x1000000;
-                    out.writeBuf[i].re = (float)sq / (float)0x1000000;
+                    writeBuf[i].im = (float)si / (float)0x1000000;
+                    writeBuf[i].re = (float)sq / (float)0x1000000;
                 }
-                out.swap(63);
-                // TODO: Buffer the data to avoid having a very high DSP frame rate
+                sampleCount += HERMES_SAMPLES_PER_FRAME;
+
+                // If enough samples are in the buffer, send to stream
+                if (sampleCount >= blockSize) {
+                    out.swap(sampleCount);
+                    sampleCount = 0;
+                }
             }            
         }
     }
 
     std::vector<Info> discover() {
-        auto sock = net::openudp("0.0.0.0", 1024);
+        // Open a UDP broadcast socket (TODO: Figure out why 255.255.255.255 doesn't work on windows with local = 0.0.0.0)
+        auto sock = net::openudp("255.255.255.255", 1024, "0.0.0.0", 0, true);
         
         // Build discovery packet
         uint8_t discoveryPkt[64];
@@ -224,6 +242,7 @@ namespace hermes {
             }
         }
 
+        // Await all responses
         std::vector<Info> devices;
         while (true) {
             // Wait for a response
@@ -257,7 +276,9 @@ namespace hermes {
 
             devices.push_back(info);
         }
-        
+
+        // Close broadcast socket
+        sock->close();        
 
         return devices;
     }

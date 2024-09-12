@@ -7,7 +7,7 @@
 #include <dsp/buffer/packer.h>
 #include <dsp/convert/stereo_to_mono.h>
 #include <dsp/sink/handler_sink.h>
-#include <spdlog/spdlog.h>
+#include <utils/flog.h>
 #include <config.h>
 #include <gui/style.h>
 #include <core.h>
@@ -203,7 +203,7 @@ private:
             stereoSink.start();
         }
         else {
-            spdlog::warn("Starting");
+            flog::warn("Starting");
             s2m.start();
             monoSink.start();
         }
@@ -217,14 +217,19 @@ private:
     }
 
     void startServer() {
-        if (modeId == SINK_MODE_TCP) {
-            listener = net::listen(hostname, port);
-            if (listener) {
-                listener->acceptAsync(clientHandler, this);
+        try {
+            if (modeId == SINK_MODE_TCP) {
+                listener = net::listen(hostname, port);
+                if (listener) {
+                    listener->acceptAsync(clientHandler, this);
+                }
+            }
+            else {
+                conn = net::openUDP("0.0.0.0", port, hostname, port, false);
             }
         }
-        else {
-            conn = net::openUDP("0.0.0.0", port, hostname, port, false);
+        catch (const std::exception& e) {
+            flog::error("Failed to open socket: {}", e.what());
         }
     }
 

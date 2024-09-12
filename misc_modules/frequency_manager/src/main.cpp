@@ -1,5 +1,5 @@
 #include <imgui.h>
-#include <spdlog/spdlog.h>
+#include <utils/flog.h>
 #include <module.h>
 #include <gui/gui.h>
 #include <gui/style.h>
@@ -485,7 +485,7 @@ private:
         }
 
         // Bookmark list
-        if (ImGui::BeginTable(("freq_manager_bkm_table" + _this->name).c_str(), 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(0, 200))) {
+        if (ImGui::BeginTable(("freq_manager_bkm_table" + _this->name).c_str(), 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(0, 200.0f * style::uiScale))) {
             ImGui::TableSetupColumn("Name");
             ImGui::TableSetupColumn("Bookmark");
             ImGui::TableSetupScrollFreeze(2, 1);
@@ -531,7 +531,7 @@ private:
         ImGui::TableSetColumnIndex(0);
         if (ImGui::Button(("Import##_freq_mgr_imp_" + _this->name).c_str(), ImVec2(ImGui::GetContentRegionAvail().x, 0)) && !_this->importOpen) {
             _this->importOpen = true;
-            _this->importDialog = new pfd::open_file("Import bookmarks", "", { "JSON Files (*.json)", "*.json", "All Files", "*" }, true);
+            _this->importDialog = new pfd::open_file("Import bookmarks", "", { "JSON Files (*.json)", "*.json", "All Files", "*" }, pfd::opt::multiselect);
         }
 
         ImGui::TableSetColumnIndex(1);
@@ -544,7 +544,7 @@ private:
             }
             config.release();
             _this->exportOpen = true;
-            _this->exportDialog = new pfd::save_file("Export bookmarks", "", { "JSON Files (*.json)", "*.json", "All Files", "*" }, true);
+            _this->exportDialog = new pfd::save_file("Export bookmarks", "", { "JSON Files (*.json)", "*.json", "All Files", "*" });
         }
         if (selectedNames.size() == 0 && _this->selectedListName != "") { style::endDisabled(); }
         ImGui::EndTable();
@@ -758,19 +758,19 @@ private:
         fs >> importBookmarks;
 
         if (!importBookmarks.contains("bookmarks")) {
-            spdlog::error("File does not contains any bookmarks");
+            flog::error("File does not contains any bookmarks");
             return;
         }
 
         if (!importBookmarks["bookmarks"].is_object()) {
-            spdlog::error("Bookmark attribute is invalid");
+            flog::error("Bookmark attribute is invalid");
             return;
         }
 
         // Load every bookmark
         for (auto const [_name, bm] : importBookmarks["bookmarks"].items()) {
             if (bookmarks.find(_name) != bookmarks.end()) {
-                spdlog::warn("Bookmark with the name '{0}' already exists in list, skipping", _name);
+                flog::warn("Bookmark with the name '{0}' already exists in list, skipping", _name);
                 continue;
             }
             FrequencyBookmark fbm;
@@ -787,7 +787,7 @@ private:
 
     void exportBookmarks(std::string path) {
         std::ofstream fs(path);
-        exportedBookmarks >> fs;
+        fs << exportedBookmarks;
         fs.close();
     }
 

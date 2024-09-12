@@ -1,5 +1,5 @@
 #include "hermes.h"
-#include <spdlog/spdlog.h>
+#include <utils/flog.h>
 #include <module.h>
 #include <gui/gui.h>
 #include <signal_path/signal_path.h>
@@ -17,7 +17,7 @@ SDRPP_MOD_INFO{
     /* Name:            */ "hermes_source",
     /* Description:     */ "Hermes Lite 2 source module for SDR++",
     /* Author:          */ "Ryzerth",
-    /* Version:         */ 0, 1, 0,
+    /* Version:         */ 0, 1, 1,
     /* Max instances    */ 1
 };
 
@@ -118,7 +118,6 @@ private:
 
         // Update host samplerate
         sampleRate = samplerates.key(srId);
-        core::setInputSampleRate(sampleRate);
     }
 
     static void menuSelected(void* ctx) {
@@ -138,12 +137,12 @@ private:
         }
 
         core::setInputSampleRate(_this->sampleRate);
-        spdlog::info("HermesSourceModule '{0}': Menu Select!", _this->name);
+        flog::info("HermesSourceModule '{0}': Menu Select!", _this->name);
     }
 
     static void menuDeselected(void* ctx) {
         HermesSourceModule* _this = (HermesSourceModule*)ctx;
-        spdlog::info("HermesSourceModule '{0}': Menu Deselect!", _this->name);
+        flog::info("HermesSourceModule '{0}': Menu Deselect!", _this->name);
     }
 
     static void start(void* ctx) {
@@ -164,7 +163,7 @@ private:
         _this->dev->setGain(_this->gain);
 
         _this->running = true;
-        spdlog::info("HermesSourceModule '{0}': Start!", _this->name);
+        flog::info("HermesSourceModule '{0}': Start!", _this->name);
     }
 
     static void stop(void* ctx) {
@@ -177,7 +176,7 @@ private:
         _this->dev->close();
         _this->lnk.stop();
 
-        spdlog::info("HermesSourceModule '{0}': Stop!", _this->name);
+        flog::info("HermesSourceModule '{0}': Stop!", _this->name);
     }
 
     static void tune(double freq, void* ctx) {
@@ -187,7 +186,7 @@ private:
             _this->dev->setFrequency(freq);
         }
         _this->freq = freq;
-        spdlog::info("HermesSourceModule '{0}': Tune: {1}!", _this->name, freq);
+        flog::info("HermesSourceModule '{0}': Tune: {1}!", _this->name, freq);
     }
 
     static void menuHandler(void* ctx) {
@@ -199,6 +198,7 @@ private:
         SmGui::ForceSync();
         if (SmGui::Combo(CONCAT("##_hermes_dev_sel_", _this->name), &_this->devId, _this->devices.txt)) {
             _this->selectMac(_this->devices.key(_this->devId));
+            core::setInputSampleRate(_this->sampleRate);
             if (!_this->selectedMac.empty()) {
                 config.acquire();
                 config.conf["device"] = _this->devices.key(_this->devId);
@@ -225,6 +225,7 @@ private:
             std::string mac = config.conf["device"];
             config.release();
             _this->selectMac(mac);
+            core::setInputSampleRate(_this->sampleRate);
         }
 
         if (_this->running) { SmGui::EndDisabled(); }

@@ -1,5 +1,6 @@
+#define NOMINMAX
 #include <imgui.h>
-#include <spdlog/spdlog.h>
+#include <utils/flog.h>
 #include <module.h>
 #include <gui/gui.h>
 #include <signal_path/signal_path.h>
@@ -9,6 +10,8 @@
 #include <filesystem>
 #include <regex>
 #include <gui/tuner.h>
+#include <algorithm>
+#include <stdexcept>
 
 #define CONCAT(a, b) ((std::string(a) + b).c_str())
 
@@ -73,7 +76,7 @@ private:
         //gui::freqSelect.minFreq = _this->centerFreq - (_this->sampleRate/2);
         //gui::freqSelect.maxFreq = _this->centerFreq + (_this->sampleRate/2);
         //gui::freqSelect.limitFreq = true;
-        spdlog::info("FileSourceModule '{0}': Menu Select!", _this->name);
+        flog::info("FileSourceModule '{0}': Menu Select!", _this->name);
     }
 
     static void menuDeselected(void* ctx) {
@@ -81,7 +84,7 @@ private:
         sigpath::iqFrontEnd.setBuffering(true);
         //gui::freqSelect.limitFreq = false;
         gui::waterfall.centerFrequencyLocked = false;
-        spdlog::info("FileSourceModule '{0}': Menu Deselect!", _this->name);
+        flog::info("FileSourceModule '{0}': Menu Deselect!", _this->name);
     }
 
     static void start(void* ctx) {
@@ -90,7 +93,7 @@ private:
         if (_this->reader == NULL) { return; }
         _this->running = true;
         _this->workerThread = _this->float32Mode ? std::thread(floatWorker, _this) : std::thread(worker, _this);
-        spdlog::info("FileSourceModule '{0}': Start!", _this->name);
+        flog::info("FileSourceModule '{0}': Start!", _this->name);
     }
 
     static void stop(void* ctx) {
@@ -102,12 +105,12 @@ private:
         _this->stream.clearWriteStop();
         _this->running = false;
         _this->reader->rewind();
-        spdlog::info("FileSourceModule '{0}': Stop!", _this->name);
+        flog::info("FileSourceModule '{0}': Stop!", _this->name);
     }
 
     static void tune(double freq, void* ctx) {
         FileSourceModule* _this = (FileSourceModule*)ctx;
-        spdlog::info("FileSourceModule '{0}': Tune: {1}!", _this->name, freq);
+        flog::info("FileSourceModule '{0}': Tune: {1}!", _this->name, freq);
     }
 
     static void menuHandler(void* ctx) {
@@ -121,6 +124,12 @@ private:
                 }
                 try {
                     _this->reader = new WavReader(_this->fileSelect.path);
+                    if (_this->reader->getSampleRate() == 0) {
+                        _this->reader->close();
+                        delete _this->reader;
+                        _this->reader = NULL;
+                        throw std::runtime_error("Sample rate may not be zero");
+                    }
                     _this->sampleRate = _this->reader->getSampleRate();
                     core::setInputSampleRate(_this->sampleRate);
                     std::string filename = std::filesystem::path(_this->fileSelect.path).filename().string();
@@ -130,8 +139,8 @@ private:
                     //gui::freqSelect.maxFreq = _this->centerFreq + (_this->sampleRate/2);
                     //gui::freqSelect.limitFreq = true;
                 }
-                catch (std::exception e) {
-                    spdlog::error("Error: {0}", e.what());
+                catch (const std::exception& e) {
+                    flog::error("Error: {}", e.what());
                 }
                 config.acquire();
                 config.conf["path"] = _this->fileSelect.path;
@@ -144,8 +153,8 @@ private:
 
     static void worker(void* ctx) {
         FileSourceModule* _this = (FileSourceModule*)ctx;
-        double sampleRate = _this->reader->getSampleRate();
-        int blockSize = sampleRate / 200.0f;
+        double sampleRate = std::max(_this->reader->getSampleRate(), (uint32_t)1);
+        int blockSize = std::min((int)(sampleRate / 200.0f), (int)STREAM_BUFFER_SIZE);
         int16_t* inBuf = new int16_t[blockSize * 2];
 
         while (true) {
@@ -159,8 +168,8 @@ private:
 
     static void floatWorker(void* ctx) {
         FileSourceModule* _this = (FileSourceModule*)ctx;
-        double sampleRate = _this->reader->getSampleRate();
-        int blockSize = sampleRate / 200.0f;
+        double sampleRate = std::max(_this->reader->getSampleRate(), (uint32_t)1);
+        int blockSize = std::min((int)(sampleRate / 200.0f), (int)STREAM_BUFFER_SIZE);
         dsp::complex_t* inBuf = new dsp::complex_t[blockSize];
 
         while (true) {
@@ -175,7 +184,6 @@ private:
         std::regex expr("[0-9]+Hz");
         std::smatch matches;
         std::regex_search(filename, matches, expr);
-        spdlog::warn("{0} {1}", filename, matches.size());
         if (matches.empty()) { return 0; }
         std::string freqStr = matches[0].str();
         return std::atof(freqStr.substr(0, freqStr.size() - 2).c_str());

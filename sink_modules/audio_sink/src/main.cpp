@@ -5,7 +5,7 @@
 #include <signal_path/sink.h>
 #include <dsp/buffer/packer.h>
 #include <dsp/convert/stereo_to_mono.h>
-#include <spdlog/spdlog.h>
+#include <utils/flog.h>
 #include <RtAudio.h>
 #include <config.h>
 #include <core.h>
@@ -31,6 +31,10 @@ public:
         monoPacker.init(&s2m.out, 512);
         stereoPacker.init(_stream->sinkOut, 512);
 
+#if RTAUDIO_VERSION_MAJOR >= 6
+        audio.setErrorCallback(&errorCallback);
+#endif
+
         bool created = false;
         std::string device = "";
         config.acquire();
@@ -42,37 +46,43 @@ public:
         device = config.conf[_streamName]["device"];
         config.release(created);
 
-        int count = audio.getDeviceCount();
         RtAudio::DeviceInfo info;
+#if RTAUDIO_VERSION_MAJOR >= 6
+        for (int i : audio.getDeviceIds()) {
+#else
+        int count = audio.getDeviceCount();
         for (int i = 0; i < count; i++) {
-            info = audio.getDeviceInfo(i);
-            if (!info.probed) { continue; }
-            if (info.outputChannels == 0) { continue; }
-            if (info.isDefaultOutput) { defaultDevId = devList.size(); }
-            devList.push_back(info);
-            deviceIds.push_back(i);
-            txtDevList += info.name;
-            txtDevList += '\0';
+#endif
+            try {
+                info = audio.getDeviceInfo(i);
+#if !defined(RTAUDIO_VERSION_MAJOR) || RTAUDIO_VERSION_MAJOR < 6
+                if (!info.probed) { continue; }
+#endif
+                if (info.outputChannels == 0) { continue; }
+                if (info.isDefaultOutput) { defaultDevId = devList.size(); }
+                devList.push_back(info);
+                deviceIds.push_back(i);
+                txtDevList += info.name;
+                txtDevList += '\0';
+            }
+            catch (const std::exception& e) {
+                flog::error("AudioSinkModule Error getting audio device ({}) info: {}", i, e.what());
+            }
         }
-
         selectByName(device);
     }
 
     ~AudioSink() {
+        stop();
     }
 
     void start() {
-        if (running) {
-            return;
-        }
-        doStart();
-        running = true;
+        if (running) { return; }
+        running = doStart();
     }
 
     void stop() {
-        if (!running) {
-            return;
-        }
+        if (!running) { return; }
         doStop();
         running = false;
     }
@@ -156,8 +166,24 @@ public:
         }
     }
 
+#if RTAUDIO_VERSION_MAJOR >= 6
+    static void errorCallback(RtAudioErrorType type, const std::string& errorText) {
+        switch (type) {
+        case RtAudioErrorType::RTAUDIO_NO_ERROR:
+            return;
+        case RtAudioErrorType::RTAUDIO_WARNING:
+        case RtAudioErrorType::RTAUDIO_NO_DEVICES_FOUND:
+        case RtAudioErrorType::RTAUDIO_DEVICE_DISCONNECT:
+            flog::warn("AudioSinkModule Warning: {} ({})", errorText, (int)type);
+            break;
+        default:
+            throw std::runtime_error(errorText);
+        }
+    }
+#endif
+
 private:
-    void doStart() {
+    bool doStart() {
         RtAudio::StreamParameters parameters;
         parameters.deviceId = deviceIds[devId];
         parameters.nChannels = 2;
@@ -172,12 +198,13 @@ private:
             audio.startStream();
             stereoPacker.start();
         }
-        catch (RtAudioError& e) {
-            spdlog::error("Could not open audio device");
-            return;
+        catch (const std::exception& e) {
+            flog::error("Could not open audio device {0}", e.what());
+            return false;
         }
 
-        spdlog::info("RtAudio stream open");
+        flog::info("RtAudio stream open");
+        return true;
     }
 
     void doStop() {
@@ -196,14 +223,6 @@ private:
         AudioSink* _this = (AudioSink*)userData;
         int count = _this->stereoPacker.out.read();
         if (count < 0) { return 0; }
-
-        // For debug purposes only...
-        // if (nBufferFrames != count) { spdlog::warn("Buffer size mismatch, wanted {0}, was asked for {1}", count, nBufferFrames); }
-        // for (int i = 0; i < count; i++) {
-        //     if (_this->stereoPacker.out.readBuf[i].l == NAN || _this->stereoPacker.out.readBuf[i].r == NAN) { spdlog::error("NAN in audio data"); }
-        //     if (_this->stereoPacker.out.readBuf[i].l == INFINITY || _this->stereoPacker.out.readBuf[i].r == INFINITY) { spdlog::error("INFINITY in audio data"); }
-        //     if (_this->stereoPacker.out.readBuf[i].l == -INFINITY || _this->stereoPacker.out.readBuf[i].r == -INFINITY) { spdlog::error("-INFINITY in audio data"); }
-        // }
 
         memcpy(outputBuffer, _this->stereoPacker.out.readBuf, nBufferFrames * sizeof(dsp::stereo_t));
         _this->stereoPacker.out.flush();

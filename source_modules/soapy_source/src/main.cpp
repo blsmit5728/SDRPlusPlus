@@ -1,7 +1,7 @@
 #include <SoapySDR/Constants.h>
 #include <SoapySDR/Version.hpp>
 #include <imgui.h>
-#include <spdlog/spdlog.h>
+#include <utils/flog.h>
 #include <module.h>
 #include <gui/gui.h>
 #include <gui/widgets/stepped_slider.h>
@@ -82,9 +82,15 @@ public:
 
 private:
     void refresh() {
-        spdlog::info("---- Soapy Version: {0}", SoapySDR::getAPIVersion());
-        devList = SoapySDR::Device::enumerate();
         txtDevList = "";
+        try {
+            devList = SoapySDR::Device::enumerate();
+        }
+        catch (const std::exception& e) {
+            flog::error("Could not list devices: {}", e.what());
+            return;
+        }
+        
         int i = 0;
         for (auto& dev : devList) {
             spdlog::info("--->  {0}", dev["driver"]);
@@ -106,12 +112,12 @@ private:
                 break;
             }
         }
-        spdlog::info("Bandwidth for samplerate {0} is {1}", samplerate, cur);
+        flog::info("Bandwidth for samplerate {0} is {1}", samplerate, cur);
         return cur;
     }
 
     void selectSampleRate(double samplerate) {
-        spdlog::info("Setting sample rate to {0}", samplerate);
+        flog::info("Setting sample rate to {0}", samplerate);
         if (sampleRates.size() == 0) {
             devId = -1;
             return;
@@ -155,13 +161,14 @@ private:
             selectDevice(devList[0]["label"]);
             return;
         }
-        //devArgs["driver"] = "cyberradiosoapy";
-        //devArgs["host"] = "192.168.0.10";
-        //devArgs["streamif"] = "enp1s0f0:enp1s0f1:enp2s0f0:enp2s0f1";
-        //devArgs["radio"] = "ndr324";
-        //devArgs["verbose"] = "true";
-         
-        SoapySDR::Device* dev = SoapySDR::Device::make(devArgs);
+        SoapySDR::Device* dev = NULL;
+        try {
+            dev = SoapySDR::Device::make(devArgs);
+        }
+        catch (const std::exception& e) {
+            flog::error("Could not open device: {}", e.what());
+            return;
+        }
 
         antennaList = dev->listAntennas(SOAPY_SDR_RX, channelId);
         txtAntennaList = "";
@@ -295,7 +302,7 @@ private:
 
     static void menuSelected(void* ctx) {
         SoapyModule* _this = (SoapyModule*)ctx;
-        spdlog::info("SoapyModule '{0}': Menu Select!", _this->name);
+        flog::info("SoapyModule '{0}': Menu Select!", _this->name);
         if (_this->devList.size() == 0) {
             return;
         }
@@ -304,18 +311,24 @@ private:
 
     static void menuDeselected(void* ctx) {
         SoapyModule* _this = (SoapyModule*)ctx;
-        spdlog::info("SoapyModule '{0}': Menu Deselect!", _this->name);
+        flog::info("SoapyModule '{0}': Menu Deselect!", _this->name);
     }
 
     static void start(void* ctx) {
         SoapyModule* _this = (SoapyModule*)ctx;
         if (_this->running) { return; }
         if (_this->devId < 0) {
-            spdlog::error("No device available");
+            flog::error("No device available");
             return;
         }
 
-        _this->dev = SoapySDR::Device::make(_this->devArgs);
+        try {
+            _this->dev = SoapySDR::Device::make(_this->devArgs);
+        }
+        catch (const std::exception& e) {
+            flog::error("Failed to open device: {}", e.what());
+            return;
+        }
 
         _this->dev->setSampleRate(SOAPY_SDR_RX, _this->channelId, _this->sampleRate);
 
@@ -344,7 +357,7 @@ private:
         _this->dev->activateStream(_this->devStream);
         _this->running = true;
         _this->workerThread = std::thread(_worker, _this);
-        spdlog::info("SoapyModule '{0}': Start!", _this->name);
+        flog::info("SoapyModule '{0}': Start!", _this->name);
     }
 
     static void stop(void* ctx) {
@@ -358,7 +371,7 @@ private:
         _this->stream.clearWriteStop();
         SoapySDR::Device::unmake(_this->dev);
 
-        spdlog::info("SoapyModule '{0}': Stop!", _this->name);
+        flog::info("SoapyModule '{0}': Stop!", _this->name);
     }
 
     static void tune(double freq, void* ctx) {
@@ -367,7 +380,7 @@ private:
         if (_this->running) {
             _this->dev->setFrequency(SOAPY_SDR_RX, _this->channelId, freq);
         }
-        spdlog::info("SoapyModule '{0}': Tune: {1}!", _this->name, freq);
+        flog::info("SoapyModule '{0}': Tune: {1}!", _this->name, freq);
     }
 
     static void menuHandler(void* ctx) {

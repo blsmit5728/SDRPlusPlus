@@ -1,9 +1,10 @@
 #include <module_com.h>
+#include <utils/flog.h>
 
 bool ModuleComManager::registerInterface(std::string moduleName, std::string name, void (*handler)(int code, void* in, void* out, void* ctx), void* ctx) {
-    std::lock_guard<std::mutex> lck(mtx);
+    std::lock_guard<std::recursive_mutex> lck(mtx);
     if (interfaces.find(name) != interfaces.end()) {
-        spdlog::error("Tried creating module interface with an existing name: {0}", name);
+        flog::error("Tried creating module interface with an existing name: {0}", name);
         return false;
     }
     ModuleComInterface iface;
@@ -15,9 +16,9 @@ bool ModuleComManager::registerInterface(std::string moduleName, std::string nam
 }
 
 bool ModuleComManager::unregisterInterface(std::string name) {
-    std::lock_guard<std::mutex> lck(mtx);
+    std::lock_guard<std::recursive_mutex> lck(mtx);
     if (interfaces.find(name) == interfaces.end()) {
-        spdlog::error("Tried to erase module interface with unknown name: {0}", name);
+        flog::error("Tried to erase module interface with unknown name: {0}", name);
         return false;
     }
     interfaces.erase(name);
@@ -25,24 +26,24 @@ bool ModuleComManager::unregisterInterface(std::string name) {
 }
 
 bool ModuleComManager::interfaceExists(std::string name) {
-    std::lock_guard<std::mutex> lck(mtx);
+    std::lock_guard<std::recursive_mutex> lck(mtx);
     if (interfaces.find(name) == interfaces.end()) { return false; }
     return true;
 }
 
 std::string ModuleComManager::getModuleName(std::string name) {
-    std::lock_guard<std::mutex> lck(mtx);
+    std::lock_guard<std::recursive_mutex> lck(mtx);
     if (interfaces.find(name) == interfaces.end()) {
-        spdlog::error("Tried to call unknown module interface: {0}", name);
+        flog::error("Tried to call unknown module interface: {0}", name);
         return "";
     }
     return interfaces[name].moduleName;
 }
 
 bool ModuleComManager::callInterface(std::string name, int code, void* in, void* out) {
-    std::lock_guard<std::mutex> lck(mtx);
+    std::lock_guard<std::recursive_mutex> lck(mtx);
     if (interfaces.find(name) == interfaces.end()) {
-        spdlog::error("Tried to call unknown module interface: {0}", name);
+        flog::error("Tried to call unknown module interface: {0}", name);
         return false;
     }
     ModuleComInterface iface = interfaces[name];

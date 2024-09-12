@@ -1,6 +1,6 @@
 #include "sdrpp_server_client.h"
 #include <imgui.h>
-#include <spdlog/spdlog.h>
+#include <utils/flog.h>
 #include <module.h>
 #include <gui/gui.h>
 #include <signal_path/signal_path.h>
@@ -17,7 +17,7 @@ SDRPP_MOD_INFO{
     /* Name:            */ "sdrpp_server_source",
     /* Description:     */ "SDR++ Server source module for SDR++",
     /* Author:          */ "Ryzerth",
-    /* Version:         */ 0, 1, 0,
+    /* Version:         */ 0, 2, 0,
     /* Max instances    */ 1
 };
 
@@ -96,23 +96,23 @@ private:
             core::setInputSampleRate(_this->client->getSampleRate());
         }
         gui::mainWindow.playButtonLocked = !(_this->client && _this->client->isOpen());
-        spdlog::info("SDRPPServerSourceModule '{0}': Menu Select!", _this->name);
+        flog::info("SDRPPServerSourceModule '{0}': Menu Select!", _this->name);
     }
 
     static void menuDeselected(void* ctx) {
         SDRPPServerSourceModule* _this = (SDRPPServerSourceModule*)ctx;
         gui::mainWindow.playButtonLocked = false;
-        spdlog::info("SDRPPServerSourceModule '{0}': Menu Deselect!", _this->name);
+        flog::info("SDRPPServerSourceModule '{0}': Menu Deselect!", _this->name);
     }
 
     static void start(void* ctx) {
         SDRPPServerSourceModule* _this = (SDRPPServerSourceModule*)ctx;
         if (_this->running) { return; }
 
-        // Try to connect if not already connected
-        if (!_this->client) {
+        // Try to connect if not already connected (Play button is locked anyway so not sure why I put this here)
+        if (!_this->connected()) {
             _this->tryConnect();
-            if (!_this->client) { return; }
+            if (!_this->connected()) { return; }
         }
 
         // Set configuration
@@ -120,33 +120,33 @@ private:
         _this->client->start();
 
         _this->running = true;
-        spdlog::info("SDRPPServerSourceModule '{0}': Start!", _this->name);
+        flog::info("SDRPPServerSourceModule '{0}': Start!", _this->name);
     }
 
     static void stop(void* ctx) {
         SDRPPServerSourceModule* _this = (SDRPPServerSourceModule*)ctx;
         if (!_this->running) { return; }
 
-        if (_this->client) { _this->client->stop(); }
+        if (_this->connected()) { _this->client->stop(); }
 
         _this->running = false;
-        spdlog::info("SDRPPServerSourceModule '{0}': Stop!", _this->name);
+        flog::info("SDRPPServerSourceModule '{0}': Stop!", _this->name);
     }
 
     static void tune(double freq, void* ctx) {
         SDRPPServerSourceModule* _this = (SDRPPServerSourceModule*)ctx;
-        if (_this->running && _this->client) {
+        if (_this->running && _this->connected()) {
             _this->client->setFrequency(freq);
         }
         _this->freq = freq;
-        spdlog::info("SDRPPServerSourceModule '{0}': Tune: {1}!", _this->name, freq);
+        flog::info("SDRPPServerSourceModule '{0}': Tune: {1}!", _this->name, freq);
     }
 
     static void menuHandler(void* ctx) {
         SDRPPServerSourceModule* _this = (SDRPPServerSourceModule*)ctx;
         float menuWidth = ImGui::GetContentRegionAvail().x;
 
-        bool connected = (_this->client && _this->client->isOpen());
+        bool connected = _this->connected();
         gui::mainWindow.playButtonLocked = !connected;
 
         ImGui::GenericDialog("##sdrpp_srv_src_err_dialog", _this->serverBusy, GENERIC_DIALOG_BUTTONS_OK, [=](){
@@ -227,14 +227,18 @@ private:
         }
     }
 
+    bool connected() {
+        return client && client->isOpen();
+    }
+
     void tryConnect() {
         try {
             if (client) { client.reset(); }
             client = server::connect(hostname, port, &stream);
             deviceInit();
         }
-        catch (std::exception e) {
-            spdlog::error("Could not connect to SDR: {0}", e.what());
+        catch (const std::exception& e) {
+            flog::error("Could not connect to SDR: {}", e.what());
             if (!strcmp(e.what(), "Server busy")) { serverBusy = true; }
         }
     }
@@ -281,7 +285,7 @@ private:
     int sampleTypeId;
     bool compression = false;
 
-    server::Client client;
+    std::shared_ptr<server::Client> client;
 };
 
 MOD_EXPORT void _INIT_() {
